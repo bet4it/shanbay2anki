@@ -1,0 +1,66 @@
+</style>
+
+<style>
+
+.card {
+  margin: 12px;
+  text-align: left;
+  background-color: #fdfdfd;
+}
+
+.section {
+  color: #414141;
+  background-color: #fefffe;
+  font-family: Arial, sans-serif;
+  font-size: 16px;
+  box-shadow: 1px 1px 5px 0px rgba(0, 0, 0, 0.3),0 0px 0px 1px rgba(0, 0, 0, 0);
+  border-radius: 5px;
+  margin: 8px 0;
+}
+
+.items{
+  margin: 0 12px;
+  padding: 10px 0;
+}
+
+#front, 
+#back{
+  line-height: 1.4em;
+}
+
+#front{
+  font-size: 1.4em;
+  font-weight: bold;
+  text-align: left;
+}
+
+#back{
+  font-size: 1em;
+  font-weight: normal;
+  text-align: left;
+}
+
+#ipa{
+  font-size: 0.8em;
+  font-weight: normal;
+  font-style:italic;
+}
+
+.content {
+  font-size: 1em
+}
+
+.name {
+  font-size: 0.8em;
+  text-align:right;
+  font-style:italic;
+}
+
+div:empty
+{
+	display: none
+}
+
+</style>
+
+<style>
