@@ -3,9 +3,13 @@ import anki
 import logging
 import os
 
+from .constants import MODEL_FIELDS
+
 logger = logging.getLogger(__name__)
 
-MODEL_FIELDS = ['word', 'ipa_uk', 'definition_cn', 'source_name1', 'source_content1', 'source_translate1', 'source_name2', 'source_content2', 'source_translate2']
+def getDeckList():
+    return [deck['name'] for deck in mw.col.decks.all()]
+
 
 def getOrCreateDeck(deckName):
     deck_id = mw.col.decks.id(deckName)
@@ -54,7 +58,7 @@ def getOrCreateModelCardTemplate(modelObject, cardTemplateName):
 def addNotesToDeck(deckObject, modelObject, database):
     modelObject['did'] = deckObject['id']
 
-    for row in database.execute("SELECT %s FROM words" % (','.join(MODEL_FIELDS))):
+    for row in database:
         newNote = anki.notes.Note(mw.col, modelObject)
         for i in range(len(row)):
             if row[i] is not None:
