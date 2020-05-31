@@ -55,14 +55,13 @@ def getOrCreateModelCardTemplate(modelObject, cardTemplateName):
     mw.col.models.addTemplate(modelObject, cardTemplate)
 
 
-def addNotesToDeck(deckObject, modelObject, database):
+def addWordToDeck(deckObject, modelObject, word):
     modelObject['did'] = deckObject['id']
 
-    for row in database:
-        newNote = anki.notes.Note(mw.col, modelObject)
-        for i in range(len(row)):
-            if row[i] is not None:
-                newNote[database.description[i][0]] = row[i]
-        mw.col.addNote(newNote)
-        mw.col.reset()
+    newNote = anki.notes.Note(mw.col, modelObject)
+    for (k, v) in word.items():
+        if k in MODEL_FIELDS and v is not None:
+            newNote[k] = v
+    mw.col.addNote(newNote)
+    mw.col.reset()
     logger.info(f"添加笔记{newNote['word']}")
