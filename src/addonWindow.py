@@ -9,6 +9,7 @@ import sqlite3
 from .UIForm import mainUI
 from .noteManager import getDeckList, getOrCreateDeck, getOrCreateModel, getOrCreateModelCardTemplate, addWordToDeck
 from .constants import MODEL_FIELDS
+from .logger import Handler
 
 logger = logging.getLogger(__name__)
 
@@ -19,14 +20,30 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.db = None
         self.config = {}
 
-        logging.basicConfig(handlers=[logging.FileHandler('shanbay2anki.log', 'w', 'utf-8')], level=logging.DEBUG)
-
         self.setupUi(self)
+        self.setupLogger()
         self.initDB()
         self.initItem()
 
+    def setupLogger(self):
+
+        def onDestroyed():
+            logger.removeHandler(QtHandler)
+
+        logging.basicConfig(handlers=[logging.FileHandler('shanbay2anki.log', 'w', 'utf-8')], level=logging.DEBUG)
+
+        logTextBox = QPlainTextEdit(self)
+        layout = QVBoxLayout()
+        layout.addWidget(logTextBox)
+        self.logTab.setLayout(layout)
+        QtHandler = Handler(self)
+        logger.addHandler(QtHandler)
+        QtHandler.newRecord.connect(logTextBox.appendPlainText)
+        logTextBox.destroyed.connect(onDestroyed)
+
     def initDB(self):
         self.conn = sqlite3.connect('data.db')
+        self.conn.set_trace_callback(logger.debug)
         self.db = self.conn.cursor()
 
     def initItem(self):
@@ -56,7 +73,7 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.config = currentConfig
         logger.info(f'当前设置:{currentConfig}')
         return currentConfig
-        
+
     def downloadVideo(self, v):
         pass
 
@@ -76,7 +93,6 @@ class Windows(QDialog, mainUI.Ui_Dialog):
             sqlStr += " or source_type1 = 'news' or source_type2 = 'news'"
 
         columns = list(MODEL_FIELDS)
-        logger.debug(f'{columns=}')
         columns.remove('ipa_audio')
         if not self.config['BrEPhonetic']:
             columns.remove('ipa_uk')
