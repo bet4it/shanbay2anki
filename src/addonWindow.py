@@ -1,12 +1,13 @@
 import anki
 from aqt.qt import *
-from aqt.utils import showInfo
+from aqt.utils import showInfo, tooltip
 
 import os
 import logging
 import sqlite3
 
 from .UIForm import mainUI
+from .workers import AudioDownloadWorker
 from .noteManager import getDeckList, getOrCreateDeck, getOrCreateModel, getOrCreateModelCardTemplate, addWordToDeck
 from .constants import MODEL_FIELDS
 from .logger import Handler
@@ -19,11 +20,20 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.conn = None
         self.db = None
         self.config = {}
+        self.audioDownloadThread = QThread(self)
 
         self.setupUi(self)
         self.setupLogger()
         self.initDB()
         self.initItem()
+
+    def closeEvent(self, event):
+        if self.audioDownloadThread.isRunning():
+            self.audioDownloadThread.requestInterruption()
+            self.workerThread.quit()
+            self.workerThread.wait()
+
+        event.accept()
 
     def setupLogger(self):
 
@@ -74,9 +84,6 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         logger.info(f'当前设置:{currentConfig}')
         return currentConfig
 
-    def downloadVideo(self, v):
-        pass
-
     @pyqtSlot()
     def on_createBtn_clicked(self):
         self.getCurrentConfig()
@@ -99,20 +106,43 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         if not self.config['AmEPhonetic']:
             columns.remove('ipa_us')
         if self.config['BrEPron']:
-            columns.append('ipa_uk_name')
             columns.append('ipa_uk_url')
         if self.config['AmEPron']:
-            columns.append('ipa_us_name')
             columns.append('ipa_us_url')
 
+        audiosDownloadTasks = []
         self.db.execute(sqlStr.format(','.join(columns), ','.join('"{0}"'.format(b) for b in selectedBooks)))
         for row in self.db:
             word = dict(zip(map(lambda x: x[0], self.db.description), row))
             if self.config['BrEPron'] and word['ipa_uk_url']:
-                word['ipa_audio'] = "[sound:{}]".format(word.pop('ipa_uk_name'))
-                self.downloadVideo(word.pop('ipa_uk_url'))
+                url = word.pop('ipa_uk_url')
+                fileName = os.path.basename(url)
+                word['ipa_audio'] = "[sound:{}]".format(fileName)
+                audiosDownloadTasks.append((fileName, url))
             if self.config['AmEPron'] and word['ipa_us_url']:
-                word['ipa_us_name'] = "[sound:{}]".format(word.pop('ipa_us_name'))
-                self.downloadVideo(word.pop('ipa_us_url'))
+                url = word.pop('ipa_us_url')
+                fileName = os.path.basename(url)
+                word['ipa_audio'] = "[sound:{}]".format(fileName)
+                audiosDownloadTasks.append((fileName, url))
             addWordToDeck(deck, model, word)
         showInfo("创建单词书成功！")
+
+        if audiosDownloadTasks:
+            self.createBtn.setEnabled(False)
+            self.progressBar.setValue(0)
+            self.progressBar.setMaximum(len(audiosDownloadTasks))
+            if self.audioDownloadThread is not None:
+                self.audioDownloadThread.requestInterruption()
+                self.audioDownloadThread.quit()
+                self.audioDownloadThread.wait()
+
+            self.audioDownloadThread = QThread(self)
+            self.audioDownloadThread.start()
+            self.audioDownloadWorker = AudioDownloadWorker(audiosDownloadTasks)
+            self.audioDownloadWorker.moveToThread(self.audioDownloadThread)
+            self.audioDownloadWorker.tick.connect(lambda: self.progressBar.setValue(self.progressBar.value() + 1))
+            self.audioDownloadWorker.start.connect(self.audioDownloadWorker.run)
+            self.audioDownloadWorker.done.connect(lambda: tooltip(f'发音下载完成'))
+            self.audioDownloadWorker.done.connect(self.audioDownloadThread.quit)
+            self.audioDownloadWorker.start.emit()
+            self.createBtn.setEnabled(True)
