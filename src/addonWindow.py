@@ -1,15 +1,18 @@
 import anki
 from aqt.qt import *
-from aqt.utils import showInfo, tooltip
+from aqt.utils import showCritical, showInfo, tooltip
 
 import os
+import json
 import logging
 import sqlite3
 
 from .UIForm import mainUI
-from .workers import AudioDownloadWorker
+from .workers import LoginStateCheckWorker, AudioDownloadWorker
 from .noteManager import getDeckList, getOrCreateDeck, getOrCreateModel, getOrCreateModelCardTemplate, addWordToDeck
 from .constants import MODEL_FIELDS
+from .loginDialog import LoginDialog
+from .shanbayAPI import ShanbayAPI
 from .logger import Handler
 
 logger = logging.getLogger(__name__)
@@ -20,7 +23,10 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.conn = None
         self.db = None
         self.config = {}
+        self.workerThread = QThread(self)
+        self.workerThread.start()
         self.audioDownloadThread = QThread(self)
+        self.api = ShanbayAPI()
 
         self.setupUi(self)
         self.setupLogger()
@@ -28,6 +34,11 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.initItem()
 
     def closeEvent(self, event):
+        if self.workerThread.isRunning():
+            self.workerThread.requestInterruption()
+            self.workerThread.quit()
+            self.workerThread.wait()
+
         if self.audioDownloadThread.isRunning():
             self.audioDownloadThread.requestInterruption()
             self.workerThread.quit()
@@ -83,6 +94,37 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.config = currentConfig
         logger.info(f'当前设置:{currentConfig}')
         return currentConfig
+
+    @pyqtSlot()
+    def on_pullRemoteWordsBtn_clicked(self):
+        self.mainTab.setEnabled(False)
+        self.progressBar.setValue(0)
+        self.progressBar.setMaximum(0)
+
+        self.loginWorker = LoginStateCheckWorker(self.api.checkCookie, {})
+        self.loginWorker.moveToThread(self.workerThread)
+        self.loginWorker.start.connect(self.loginWorker.run)
+        self.loginWorker.logSuccess.connect(self.onLogSuccess)
+        self.loginWorker.logFailed.connect(self.onLoginFailed)
+        self.loginWorker.start.emit()
+
+    @pyqtSlot()
+    def onLoginFailed(self):
+        showCritical('第一次登录或cookie失效!请重新登录')
+        self.progressBar.setValue(0)
+        self.progressBar.setMaximum(1)
+        self.mainTab.setEnabled(True)
+        self.loginDialog = LoginDialog(
+            loginUrl=self.api.loginUrl,
+            loginCheckCallbackFn=self.api.loginCheckCallbackFn,
+            parent=self
+        )
+        self.loginDialog.loginSucceed.connect(self.onLogSuccess)
+        self.loginDialog.show()
+
+    @pyqtSlot(str)
+    def onLogSuccess(self, cookie):
+        self.api.checkCookie(json.loads(cookie))
 
     @pyqtSlot()
     def on_createBtn_clicked(self):

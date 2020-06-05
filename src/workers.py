@@ -6,6 +6,23 @@ from .misc import ThreadPool
 from requests.adapters import HTTPAdapter
 from aqt.qt import QObject, pyqtSignal, QThread
 
+class LoginStateCheckWorker(QObject):
+    start = pyqtSignal()
+    logSuccess = pyqtSignal(str)
+    logFailed = pyqtSignal()
+
+    def __init__(self, checkFn, cookie):
+        super().__init__()
+        self.checkFn = checkFn
+        self.cookie = cookie
+
+    def run(self):
+        loginState = self.checkFn(self.cookie)
+        if loginState:
+            self.logSuccess.emit(json.dumps(self.cookie))
+        else:
+            self.logFailed.emit()
+
 class AudioDownloadWorker(QObject):
     start = pyqtSignal()
     tick = pyqtSignal()
