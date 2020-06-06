@@ -18,29 +18,28 @@
   margin: 8px 0;
 }
 
-.items{
+.items {
   margin: 0 12px;
   padding: 10px 0;
 }
 
-#front, 
-#back{
+#front, #back {
   line-height: 1.4em;
 }
 
-#front{
+#front {
   font-size: 1.4em;
   font-weight: bold;
   text-align: left;
 }
 
-#back{
+#back {
   font-size: 1em;
   font-weight: normal;
   text-align: left;
 }
 
-#ipa{
+#ipa {
   font-size: 0.8em;
   font-weight: normal;
   font-style:italic;
@@ -56,10 +55,15 @@
   font-style:italic;
 }
 
-div:empty
-{
+div:empty {
 	display: none
 }
+
+a {
+  text-decoration:none;
+  color:inherit
+}
+
 
 </style>
 

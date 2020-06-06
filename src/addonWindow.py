@@ -10,7 +10,7 @@ import sqlite3
 from .UIForm import mainUI
 from .workers import LoginStateCheckWorker, AudioDownloadWorker
 from .noteManager import getDeckList, getOrCreateDeck, getOrCreateModel, getOrCreateModelCardTemplate, addWordToDeck
-from .constants import MODEL_FIELDS
+from .constants import MODEL_FIELDS, INTENT_TEMPLATE
 from .loginDialog import LoginDialog
 from .shanbayAPI import ShanbayAPI
 from .logger import Handler
@@ -135,37 +135,37 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         deck = getOrCreateDeck(self.deckComboBox.currentText())
         selectedBooks = [self.bookListWidget.item(index).text() for index in range(self.bookListWidget.count()) if
                          self.bookListWidget.item(index).checkState() == Qt.Checked]
-        sqlStr = "SELECT {0} from words where source_name1 in ({1}) or source_name2 in ({1})"
+        sqlStr = "SELECT * from words where source_name1 in ({0}) or source_name2 in ({0})"
 
         if '扇贝新闻' in selectedBooks:
             selectedBooks.remove('扇贝新闻')
             sqlStr += " or source_type1 = 'news' or source_type2 = 'news'"
 
         columns = list(MODEL_FIELDS)
-        columns.remove('ipa_audio')
         if not self.config['BrEPhonetic']:
             columns.remove('ipa_uk')
         if not self.config['AmEPhonetic']:
             columns.remove('ipa_us')
-        if self.config['BrEPron']:
-            columns.append('ipa_uk_url')
-        if self.config['AmEPron']:
-            columns.append('ipa_us_url')
 
         audiosDownloadTasks = []
-        self.db.execute(sqlStr.format(','.join(columns), ','.join('"{0}"'.format(b) for b in selectedBooks)))
+        self.db.execute(sqlStr.format(','.join('"{0}"'.format(b) for b in selectedBooks)))
         for row in self.db:
-            word = dict(zip(map(lambda x: x[0], self.db.description), row))
-            if self.config['BrEPron'] and word['ipa_uk_url']:
-                url = word.pop('ipa_uk_url')
+            data = dict(zip(map(lambda x: x[0], self.db.description), row))
+            word = {k: v for k, v in data.items() if k in columns}
+            if self.config['BrEPron'] and data['ipa_uk_url']:
+                url = data['ipa_uk_url']
                 fileName = os.path.basename(url)
                 word['ipa_audio'] = "[sound:{}]".format(fileName)
                 audiosDownloadTasks.append((fileName, url))
-            if self.config['AmEPron'] and word['ipa_us_url']:
-                url = word.pop('ipa_us_url')
+            if self.config['AmEPron'] and data['ipa_us_url']:
+                url = data['ipa_us_url']
                 fileName = os.path.basename(url)
                 word['ipa_audio'] = "[sound:{}]".format(fileName)
                 audiosDownloadTasks.append((fileName, url))
+            for i in (1,2):
+                if data[f'source_type{i}'] in INTENT_TEMPLATE:
+                    word[f'source_name{i}'] = INTENT_TEMPLATE[data[f'source_type{i}']].format(
+                        data[f'source_article{i}'], data[f'source_paragraph{i}'], data[f'source_name{i}'])
             addWordToDeck(deck, model, word)
         showInfo("创建单词书成功！")
 
