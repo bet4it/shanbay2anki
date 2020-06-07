@@ -65,6 +65,7 @@ class Windows(QDialog, mainUI.Ui_Dialog):
     def initDB(self):
         self.conn = sqlite3.connect('data.db')
         self.conn.set_trace_callback(logger.debug)
+        self.conn.row_factory = sqlite3.Row
         self.db = self.conn.cursor()
 
     def initItem(self):
@@ -150,22 +151,21 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         audiosDownloadTasks = []
         self.db.execute(sqlStr.format(','.join('"{0}"'.format(b) for b in selectedBooks)))
         for row in self.db:
-            data = dict(zip(map(lambda x: x[0], self.db.description), row))
-            word = {k: v for k, v in data.items() if k in columns}
-            if self.config['BrEPron'] and data['ipa_uk_url']:
-                url = data['ipa_uk_url']
+            word = {k:row[k] for k in row.keys() if k in columns}
+            if self.config['BrEPron'] and row['ipa_uk_url']:
+                url = row['ipa_uk_url']
                 fileName = os.path.basename(url)
                 word['ipa_audio'] = "[sound:{}]".format(fileName)
                 audiosDownloadTasks.append((fileName, url))
-            if self.config['AmEPron'] and data['ipa_us_url']:
-                url = data['ipa_us_url']
+            if self.config['AmEPron'] and row['ipa_us_url']:
+                url = row['ipa_us_url']
                 fileName = os.path.basename(url)
                 word['ipa_audio'] = "[sound:{}]".format(fileName)
                 audiosDownloadTasks.append((fileName, url))
             for i in (1,2):
-                if data[f'source_type{i}'] in INTENT_TEMPLATE:
-                    word[f'source_name{i}'] = INTENT_TEMPLATE[data[f'source_type{i}']].format(
-                        data[f'source_article{i}'], data[f'source_paragraph{i}'], data[f'source_name{i}'])
+                if row[f'source_type{i}'] in INTENT_TEMPLATE:
+                    word[f'source_name{i}'] = INTENT_TEMPLATE[row[f'source_type{i}']].format(
+                        row[f'source_article{i}'], row[f'source_paragraph{i}'], row[f'source_name{i}'])
             addWordToDeck(deck, model, word)
         showInfo("创建单词书成功！")
 
