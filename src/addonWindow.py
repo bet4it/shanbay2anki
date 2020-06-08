@@ -1,4 +1,5 @@
 import anki
+from aqt import mw
 from aqt.qt import *
 from aqt.utils import showCritical, showInfo, tooltip
 
@@ -23,6 +24,7 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.conn = None
         self.db = None
         self.config = {}
+        self.cookie = "{}"
         self.workerThread = QThread(self)
         self.workerThread.start()
         self.audioDownloadThread = QThread(self)
@@ -30,6 +32,7 @@ class Windows(QDialog, mainUI.Ui_Dialog):
 
         self.setupUi(self)
         self.setupLogger()
+        self.setupGUIByConfig()
         self.initDB()
         self.initItem()
 
@@ -62,6 +65,17 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         QtHandler.newRecord.connect(logTextBox.appendPlainText)
         logTextBox.destroyed.connect(onDestroyed)
 
+    def setupGUIByConfig(self):
+        config = mw.addonManager.getConfig(__name__)
+        self.deckComboBox.setCurrentText(config['deck'])
+        self.sentenceCheckBox.setChecked(config['sentence'])
+        self.BrEPhoneticCheckBox.setChecked(config['BrEPhonetic'])
+        self.AmEPhoneticCheckBox.setChecked(config['AmEPhonetic'])
+        self.BrEPronRadioButton.setChecked(config['BrEPron'])
+        self.AmEPronRadioButton.setChecked(config['AmEPron'])
+        self.noPronRadioButton.setChecked(config['noPron'])
+        self.cookie = config['cookie']
+
     def initDB(self):
         self.conn = sqlite3.connect('data.db')
         self.conn.set_trace_callback(logger.debug)
@@ -83,18 +97,20 @@ class Windows(QDialog, mainUI.Ui_Dialog):
             item.setCheckState(Qt.Unchecked)
             self.bookListWidget.addItem(item)
 
-    def getCurrentConfig(self) -> dict:
+    def saveCurrentConfig(self) -> dict:
         currentConfig = dict(
+            deck=self.deckComboBox.currentText(),
             sentence=self.sentenceCheckBox.isChecked(),
-            AmEPhonetic=self.AmEPhoneticCheckBox.isChecked(),
             BrEPhonetic=self.BrEPhoneticCheckBox.isChecked(),
+            AmEPhonetic=self.AmEPhoneticCheckBox.isChecked(),
             BrEPron=self.BrEPronRadioButton.isChecked(),
             AmEPron=self.AmEPronRadioButton.isChecked(),
             noPron=self.noPronRadioButton.isChecked(),
+            cookie=self.cookie,
         )
         self.config = currentConfig
-        logger.info(f'当前设置:{currentConfig}')
-        return currentConfig
+        logger.info(f'保存配置项:{currentConfig}')
+        mw.addonManager.writeConfig(__name__, currentConfig)
 
     @pyqtSlot()
     def on_pullRemoteWordsBtn_clicked(self):
@@ -102,10 +118,10 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.progressBar.setValue(0)
         self.progressBar.setMaximum(0)
 
-        self.loginWorker = LoginStateCheckWorker(self.api.checkCookie, {})
+        self.loginWorker = LoginStateCheckWorker(self.api.checkCookie, json.loads(self.cookie))
         self.loginWorker.moveToThread(self.workerThread)
         self.loginWorker.start.connect(self.loginWorker.run)
-        self.loginWorker.logSuccess.connect(self.onLogSuccess)
+        self.loginWorker.logSuccess.connect(self.onLoginSuccess)
         self.loginWorker.logFailed.connect(self.onLoginFailed)
         self.loginWorker.start.emit()
 
@@ -120,16 +136,21 @@ class Windows(QDialog, mainUI.Ui_Dialog):
             loginCheckCallbackFn=self.api.loginCheckCallbackFn,
             parent=self
         )
-        self.loginDialog.loginSucceed.connect(self.onLogSuccess)
+        self.loginDialog.loginSucceed.connect(self.onLoginSuccess)
         self.loginDialog.show()
 
     @pyqtSlot(str)
-    def onLogSuccess(self, cookie):
+    def onLoginSuccess(self, cookie):
         self.api.checkCookie(json.loads(cookie))
+        self.cookie = cookie
+        self.saveCurrentConfig()
+        self.progressBar.setValue(0)
+        self.progressBar.setMaximum(1)
+        self.mainTab.setEnabled(True)
 
     @pyqtSlot()
     def on_createBtn_clicked(self):
-        self.getCurrentConfig()
+        self.saveCurrentConfig()
 
         model = getOrCreateModel("Shanbay")
         getOrCreateModelCardTemplate(model, 'default')
