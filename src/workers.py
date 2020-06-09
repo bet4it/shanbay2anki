@@ -24,6 +24,31 @@ class LoginStateCheckWorker(QObject):
         else:
             self.logFailed.emit()
 
+class WordDownloadWorker(QObject):
+    start = pyqtSignal()
+    tick = pyqtSignal()
+    done = pyqtSignal()
+    logger = logging.getLogger(__name__ + '.WordDownloadWorker')
+
+    def __init__(self, api):
+        super().__init__()
+        self.api = api
+
+    def run(self):
+        currentThread = QThread.currentThread()
+
+        def _query(word):
+            self.api.insertWord(word)
+            self.tick.emit()
+
+        for word in self.api.getAllWords():
+            if currentThread.isInterruptionRequested():
+                return
+            self.api.insertWord(word)
+            self.tick.emit()
+
+        self.done.emit()
+
 class AudioDownloadWorker(QObject):
     start = pyqtSignal()
     tick = pyqtSignal()

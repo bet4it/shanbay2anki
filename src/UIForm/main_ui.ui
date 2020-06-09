@@ -203,11 +203,14 @@
    </item>
    <item>
     <widget class="QProgressBar" name="progressBar">
+     <property name="maximum">
+      <number>1</number>
+     </property>
      <property name="value">
       <number>0</number>
      </property>
-     <property name="textVisible">
-      <bool>false</bool>
+     <property name="format">
+      <string>%v/%m</string>
      </property>
     </widget>
    </item>

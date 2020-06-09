@@ -112,8 +112,8 @@ class Ui_Dialog(object):
         self.tabWidget.addTab(self.logTab, "")
         self.main_layout.addWidget(self.tabWidget)
         self.progressBar = QtWidgets.QProgressBar(Dialog)
+        self.progressBar.setMaximum(1)
         self.progressBar.setProperty("value", 0)
-        self.progressBar.setTextVisible(False)
         self.progressBar.setObjectName("progressBar")
         self.main_layout.addWidget(self.progressBar)
 
@@ -138,3 +138,4 @@ class Ui_Dialog(object):
         self.sentenceCheckBox.setText(_translate("Dialog", "例句"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.settingTab), _translate("Dialog", "设置"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.logTab), _translate("Dialog", "日志"))
+        self.progressBar.setFormat(_translate("Dialog", "%v/%m"))

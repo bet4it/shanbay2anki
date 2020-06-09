@@ -3,15 +3,12 @@ from aqt import mw
 from aqt.qt import *
 from aqt.utils import showCritical, showInfo, tooltip
 
-import os
 import json
 import logging
-import sqlite3
 
 from .UIForm import mainUI
-from .workers import LoginStateCheckWorker, AudioDownloadWorker
-from .noteManager import getDeckList, getOrCreateDeck, getOrCreateModel, getOrCreateModelCardTemplate, addWordToDeck
-from .constants import MODEL_FIELDS, INTENT_TEMPLATE
+from .workers import LoginStateCheckWorker, WordDownloadWorker, AudioDownloadWorker
+from .noteManager import getDeckList
 from .loginDialog import LoginDialog
 from .shanbayAPI import ShanbayAPI
 from .logger import Handler
@@ -27,13 +24,13 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.cookie = "{}"
         self.workerThread = QThread(self)
         self.workerThread.start()
+        self.wordDownloadThread = QThread(self)
         self.audioDownloadThread = QThread(self)
         self.api = ShanbayAPI()
 
         self.setupUi(self)
         self.setupLogger()
         self.setupGUIByConfig()
-        self.initDB()
         self.initItem()
 
     def closeEvent(self, event):
@@ -42,10 +39,15 @@ class Windows(QDialog, mainUI.Ui_Dialog):
             self.workerThread.quit()
             self.workerThread.wait()
 
+        if self.wordDownloadThread.isRunning():
+            self.wordDownloadThread.requestInterruption()
+            self.wordDownloadThread.quit()
+            self.wordDownloadThread.wait()
+
         if self.audioDownloadThread.isRunning():
             self.audioDownloadThread.requestInterruption()
-            self.workerThread.quit()
-            self.workerThread.wait()
+            self.audioDownloadThread.quit()
+            self.audioDownloadThread.wait()
 
         event.accept()
 
@@ -76,26 +78,21 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.noPronRadioButton.setChecked(config['noPron'])
         self.cookie = config['cookie']
 
-    def initDB(self):
-        self.conn = sqlite3.connect('data.db')
-        self.conn.set_trace_callback(logger.debug)
-        self.conn.row_factory = sqlite3.Row
-        self.db = self.conn.cursor()
-
     def initItem(self):
         self.deckComboBox.addItems(getDeckList())
 
-        self.db.execute('''SELECT source_name1 from words where source_type1 = 'book'
-                     UNION SELECT source_name2 from words where source_type2 = 'book'
-                     UNION SELECT '扇贝新闻' from words where source_type1 = 'news' or source_type2 = 'news'
-                     ''')
-
-        for bookname in reversed(self.db.fetchall()):
+        self.bookListWidget.clear()
+        for bookName in self.api.getAllBooks():
             item = QListWidgetItem()
-            item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-            item.setText(bookname[0])
+            item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            item.setText(bookName)
             item.setCheckState(Qt.Unchecked)
             self.bookListWidget.addItem(item)
+
+        if self.bookListWidget.count() > 0:
+            self.createBtn.setEnabled(True)
+        else:
+            self.createBtn.setEnabled(False)
 
     def saveCurrentConfig(self) -> dict:
         currentConfig = dict(
@@ -145,53 +142,31 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.cookie = cookie
         self.saveCurrentConfig()
         self.progressBar.setValue(0)
-        self.progressBar.setMaximum(1)
-        self.mainTab.setEnabled(True)
+        self.progressBar.setMaximum(self.api.getWordNumber())
+        self.wordDownloadThread = QThread(self)
+        self.wordDownloadThread.start()
+        self.wordDownloadWorker = WordDownloadWorker(self.api)
+        self.wordDownloadWorker.moveToThread(self.wordDownloadThread)
+        self.wordDownloadWorker.tick.connect(lambda: self.progressBar.setValue(self.progressBar.value() + 1))
+        self.wordDownloadWorker.start.connect(self.wordDownloadWorker.run)
+        self.wordDownloadWorker.done.connect(lambda: tooltip(f'单词下载完成'))
+        self.wordDownloadWorker.done.connect(self.wordDownloadThread.quit)
+        self.wordDownloadWorker.done.connect(lambda: self.mainTab.setEnabled(True))
+        self.wordDownloadWorker.done.connect(self.initItem)
+        self.wordDownloadWorker.start.emit()
 
     @pyqtSlot()
     def on_createBtn_clicked(self):
         self.saveCurrentConfig()
 
-        model = getOrCreateModel("Shanbay")
-        getOrCreateModelCardTemplate(model, 'default')
-        deck = getOrCreateDeck(self.deckComboBox.currentText())
         selectedBooks = [self.bookListWidget.item(index).text() for index in range(self.bookListWidget.count()) if
                          self.bookListWidget.item(index).checkState() == Qt.Checked]
-        sqlStr = "SELECT * from words where source_name1 in ({0}) or source_name2 in ({0})"
-
-        if '扇贝新闻' in selectedBooks:
-            selectedBooks.remove('扇贝新闻')
-            sqlStr += " or source_type1 = 'news' or source_type2 = 'news'"
-
-        columns = list(MODEL_FIELDS)
-        if not self.config['BrEPhonetic']:
-            columns.remove('ipa_uk')
-        if not self.config['AmEPhonetic']:
-            columns.remove('ipa_us')
-
+        deckName = self.deckComboBox.currentText()
         audiosDownloadTasks = []
-        self.db.execute(sqlStr.format(','.join('"{0}"'.format(b) for b in selectedBooks)))
-        for row in self.db:
-            word = {k:row[k] for k in row.keys() if k in columns}
-            if self.config['BrEPron'] and row['ipa_uk_url']:
-                url = row['ipa_uk_url']
-                fileName = os.path.basename(url)
-                word['ipa_audio'] = "[sound:{}]".format(fileName)
-                audiosDownloadTasks.append((fileName, url))
-            if self.config['AmEPron'] and row['ipa_us_url']:
-                url = row['ipa_us_url']
-                fileName = os.path.basename(url)
-                word['ipa_audio'] = "[sound:{}]".format(fileName)
-                audiosDownloadTasks.append((fileName, url))
-            for i in (1,2):
-                if row[f'source_type{i}'] in INTENT_TEMPLATE:
-                    word[f'source_name{i}'] = INTENT_TEMPLATE[row[f'source_type{i}']].format(
-                        row[f'source_article{i}'], row[f'source_paragraph{i}'], row[f'source_name{i}'])
-            addWordToDeck(deck, model, word)
+        self.api.createWordBook(deckName, selectedBooks, self.config, audiosDownloadTasks)
         showInfo("创建单词书成功！")
 
         if audiosDownloadTasks:
-            self.createBtn.setEnabled(False)
             self.progressBar.setValue(0)
             self.progressBar.setMaximum(len(audiosDownloadTasks))
             if self.audioDownloadThread is not None:
@@ -208,4 +183,3 @@ class Windows(QDialog, mainUI.Ui_Dialog):
             self.audioDownloadWorker.done.connect(lambda: tooltip(f'发音下载完成'))
             self.audioDownloadWorker.done.connect(self.audioDownloadThread.quit)
             self.audioDownloadWorker.start.emit()
-            self.createBtn.setEnabled(True)
