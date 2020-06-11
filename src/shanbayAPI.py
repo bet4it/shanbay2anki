@@ -31,6 +31,8 @@ class ShanbayAPI():
         self.db = self.conn.cursor()
         #self.db.execute('DROP TABLE IF EXISTS words')
         self.db.execute('CREATE TABLE IF NOT EXISTS words ({})'.format(','.join(map(lambda c:c+' TEXT', DB_FIELDS))))
+        self.chapterNames = {}
+        self.bookNames = {}
 
     def checkCookie(self, cookie):
         rsp = requests.get(urljoin(API_URL, 'bayuser/user_detail'), cookies=cookie, headers=self.headers)
@@ -63,6 +65,50 @@ class ShanbayAPI():
         r = self.session.get(url, timeout=self.timeout)
         return r.json()
 
+    def getWordExamples(self, word):
+        url = urljoin(API_URL, f'abc/words/vocabularies/{word}/examples')
+        r = self.session.get(url, timeout=self.timeout)
+        for example in r.json():
+            yield (example['content_en'].replace('vocab>', 'b>'), example['content_cn'], word)
+        yield ("", "", word)
+        yield ("", "", word)
+
+    def getSentenceTranslate(self, sentence):
+        from .bays import convert
+        url = urljoin(API_URL, f'reading/bilingual?sentence_id={sentence}')
+        r = self.session.get(url, timeout=self.timeout)
+        return convert(r.json()['text'])
+
+    def getArticle(self, chapter):
+        url = urljoin(API_URL, f'reading/articles/{chapter}')
+        r = self.session.get(url, timeout=self.timeout)
+        return r.json()
+
+    def getBookCatalogs(self, book):
+        url = urljoin(API_URL, f'reading/books/{book}/static_catalogs')
+        r = self.session.get(url, timeout=self.timeout)
+        if r.status_code == 200:
+            return r.json()
+        return None
+
+    def getChapterName(self, book, chapter):
+        if chapter not in self.chapterNames:
+            catalogs = self.getBookCatalogs(book)
+            if catalogs is not None:
+                self.bookNames[book] = {'cn': catalogs['book']['name_cn'], 'en': catalogs['book']['name_en']}
+                for c in catalogs['catalogs']:
+                    self.chapterNames[c['id']] = {'cn': c['title_cn'], 'en': c['title_en']}
+            else:
+                article = self.getArticle(chapter)
+                self.chapterNames[chapter] =  {'cn': article['title_cn'], 'en': article['title_en']}
+                catalogs = self.getBookCatalogs(article['book_id'])
+                self.bookNames[book] =  {'cn': catalogs['book']['name_cn'], 'en': catalogs['book']['name_en']}
+        bookNameCN = self.bookNames[book]['cn']
+        bookNameEN = self.bookNames[book]['en']
+        chapterNameCN = self.chapterNames[chapter]['cn']
+        chapterNameEN = self.chapterNames[chapter]['en']
+        return bookNameCN, bookNameEN, chapterNameCN, chapterNameEN
+
     def insertWord(self, word):
         self.db.execute('SELECT 1 FROM words WHERE id=? LIMIT 1', (word,))
         if self.db.fetchone() is not None:
@@ -86,12 +132,13 @@ class ShanbayAPI():
         idx = 1
         for obj in reversed(wordData['objects']):
             if obj['app_name'] == '扇贝阅读' and obj['objective'] :
-                sources = (obj['source_name'], obj['objective']['article_code'], obj['objective']['paragraph_code'], obj['objective']['sentence_code'], obj['source_content'], word)
-                self.db.execute(f"UPDATE words set source_name{idx} = ?, source_article{idx} = ?, source_paragraph{idx} = ?, source_sentence{idx} = ?, source_content{idx} = ? where id = ?", sources)
+                sources = (obj['objective']['article_code'], obj['objective']['paragraph_code'], obj['objective']['sentence_code'], obj['source_content'], word)
+                self.db.execute(f"UPDATE words set source_article{idx} = ?, source_paragraph{idx} = ?, source_sentence{idx} = ?, source_content{idx} = ? where id = ?", sources)
                 if 'book_code' in obj['objective']:
-                    self.db.execute(f"UPDATE words set source_type{idx} = ? where id = ?", ('book', word))
+                    bookNameCN, bookNameEN, chapterNameCN, chapterNameEN = self.getChapterName(obj['objective']['book_code'], obj['objective']['article_code'])
+                    self.db.execute(f"UPDATE words set source_type{idx} = ?, source_name_cn{idx} = ?, source_name_en{idx} = ?, source_title_cn{idx} = ?, source_title_en{idx} = ? where id = ?", ('book', bookNameCN, bookNameEN, chapterNameCN, chapterNameEN, word))
                 elif 'article_code' in obj['objective']:
-                    self.db.execute(f"UPDATE words set source_type{idx} = ? where id = ?", ('news', word))
+                    self.db.execute(f"UPDATE words set source_type{idx} = ?, source_name_en{idx} = ? where id = ?", ('news', obj['source_name'], word))
                 idx += 1
                 if idx == 3:
                     break
@@ -109,8 +156,8 @@ class ShanbayAPI():
             idx += 1
 
     def getAllBooks(self):
-        self.db.execute('''SELECT source_name1 from words where source_type1 = 'book'
-                     UNION SELECT source_name2 from words where source_type2 = 'book'
+        self.db.execute('''SELECT source_name_cn1 from words where source_type1 = 'book'
+                     UNION SELECT source_name_cn2 from words where source_type2 = 'book'
                      UNION SELECT '扇贝新闻' from words where source_type1 = 'news' or source_type2 = 'news'
                      ''')
         return map(lambda i: i[0], reversed(self.db.fetchall()))
@@ -119,7 +166,7 @@ class ShanbayAPI():
         model = getOrCreateModel("Shanbay")
         getOrCreateModelCardTemplate(model, 'default')
         deck = getOrCreateDeck(deckName)
-        sqlStr = "SELECT * from words where source_name1 in ({0}) or source_name2 in ({0})"
+        sqlStr = "SELECT * from words where source_name_cn1 in ({0}) or source_name_cn2 in ({0})"
 
         if '扇贝新闻' in selectedBooks:
             selectedBooks.remove('扇贝新闻')
@@ -145,7 +192,39 @@ class ShanbayAPI():
                 word['ipa_audio'] = "[sound:{}]".format(fileName)
                 audiosDownloadTasks.append((fileName, url))
             for i in (1,2):
+                if currentConfig['titleCN'] and row[f'source_name_cn{i}']:
+                    word[f'source_name{i}'] = row[f'source_name_cn{i}']
+                    if  row[f'source_title_cn{i}']:
+                        word[f'source_name{i}'] += ' ── ' + row[f'source_title_cn{i}']
+                else:
+                    word[f'source_name{i}'] = row[f'source_name_en{i}']
+                    if  row[f'source_title_en{i}']:
+                        word[f'source_name{i}'] += ' -- ' + row[f'source_title_en{i}']
                 if row[f'source_type{i}'] in INTENT_TEMPLATE:
                     word[f'source_name{i}'] = INTENT_TEMPLATE[row[f'source_type{i}']].format(
-                        row[f'source_article{i}'], row[f'source_paragraph{i}'], row[f'source_name{i}'])
+                        row[f'source_article{i}'], row[f'source_paragraph{i}'], word[f'source_name{i}'])
             addWordToDeck(deck, model, word)
+
+    def getWordsWithoutExample(self):
+        self.db.execute('SELECT id from words where examples1_en is NULL')
+        return self.db.fetchall()
+
+    def insertWordExamples(self, word):
+        idx = 1
+        for example in self.getWordExamples(word):
+            self.db.execute(f"UPDATE words set examples{idx}_en = ?, examples{idx}_cn = ? where id = ?", example)
+            idx += 1
+            if idx == 3:
+                break
+        self.conn.commit()
+
+    def getSentencesWithoutTranslate(self):
+        self.db.execute("SELECT id, source_type1, source_sentence1, source_translate1, source_type2, source_sentence2, source_translate2 from words where (source_type1 = 'book' and source_translate1 is null) or (source_type2 = 'book' and source_translate2 is null)")
+        return self.db.fetchall()
+
+    def insertSentenceTranslates(self, row):
+        if row['source_type1'] == 'book' and row['source_translate1'] is None:
+            self.db.execute(f"UPDATE words set source_translate1 = ? where id = ?", (self.getSentenceTranslate(row['source_sentence1']), row['id']))
+        if row['source_type2'] == 'book' and row['source_translate2'] is None:
+            self.db.execute(f"UPDATE words set source_translate2 = ? where id = ?", (self.getSentenceTranslate(row['source_sentence2']), row['id']))
+        self.conn.commit()

@@ -7,7 +7,7 @@ import json
 import logging
 
 from .UIForm import mainUI
-from .workers import LoginStateCheckWorker, WordDownloadWorker, AudioDownloadWorker
+from .workers import *
 from .noteManager import getDeckList
 from .loginDialog import LoginDialog
 from .shanbayAPI import ShanbayAPI
@@ -23,7 +23,6 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.config = {}
         self.cookie = "{}"
         self.workerThread = QThread(self)
-        self.workerThread.start()
         self.wordDownloadThread = QThread(self)
         self.audioDownloadThread = QThread(self)
         self.api = ShanbayAPI()
@@ -70,13 +69,21 @@ class Windows(QDialog, mainUI.Ui_Dialog):
     def setupGUIByConfig(self):
         config = mw.addonManager.getConfig(__name__)
         self.deckComboBox.setCurrentText(config['deck'])
-        self.sentenceCheckBox.setChecked(config['sentence'])
+        self.exampleCheckBox.setChecked(config['example'])
+        self.titleCNRadioButton.setChecked(config['titleCN'])
+        self.titleENRadioButton.setChecked(config['titleEN'])
         self.BrEPhoneticCheckBox.setChecked(config['BrEPhonetic'])
         self.AmEPhoneticCheckBox.setChecked(config['AmEPhonetic'])
         self.BrEPronRadioButton.setChecked(config['BrEPron'])
         self.AmEPronRadioButton.setChecked(config['AmEPron'])
         self.noPronRadioButton.setChecked(config['noPron'])
         self.cookie = config['cookie']
+        try:
+            from .bays import convert
+        except ModuleNotFoundError:
+            return
+        self.translateCheckBox.setEnabled(True)
+        self.translateCheckBox.setChecked(config['translate'])
 
     def initItem(self):
         self.deckComboBox.addItems(getDeckList())
@@ -97,7 +104,10 @@ class Windows(QDialog, mainUI.Ui_Dialog):
     def saveCurrentConfig(self) -> dict:
         currentConfig = dict(
             deck=self.deckComboBox.currentText(),
-            sentence=self.sentenceCheckBox.isChecked(),
+            example=self.exampleCheckBox.isChecked(),
+            translate=self.translateCheckBox.isChecked(),
+            titleCN=self.titleCNRadioButton.isChecked(),
+            titleEN=self.titleENRadioButton.isChecked(),
             BrEPhonetic=self.BrEPhoneticCheckBox.isChecked(),
             AmEPhonetic=self.AmEPhoneticCheckBox.isChecked(),
             BrEPron=self.BrEPronRadioButton.isChecked(),
@@ -115,11 +125,14 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.progressBar.setValue(0)
         self.progressBar.setMaximum(0)
 
+        self.workerThread.start()
         self.loginWorker = LoginStateCheckWorker(self.api.checkCookie, json.loads(self.cookie))
         self.loginWorker.moveToThread(self.workerThread)
         self.loginWorker.start.connect(self.loginWorker.run)
         self.loginWorker.logSuccess.connect(self.onLoginSuccess)
+        self.loginWorker.logSuccess.connect(self.workerThread.quit)
         self.loginWorker.logFailed.connect(self.onLoginFailed)
+        self.loginWorker.logFailed.connect(self.workerThread.quit)
         self.loginWorker.start.emit()
 
     @pyqtSlot()
@@ -141,19 +154,55 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.api.checkCookie(json.loads(cookie))
         self.cookie = cookie
         self.saveCurrentConfig()
-        self.progressBar.setValue(0)
-        self.progressBar.setMaximum(self.api.getWordNumber())
-        self.wordDownloadThread = QThread(self)
+        self.downloadWord()
+
+    def downloadWord(self):
         self.wordDownloadThread.start()
         self.wordDownloadWorker = WordDownloadWorker(self.api)
         self.wordDownloadWorker.moveToThread(self.wordDownloadThread)
+        self.progressBar.setTextVisible(True)
+        self.progressBar.setValue(0)
+        self.progressBar.setMaximum(self.api.getWordNumber())
         self.wordDownloadWorker.tick.connect(lambda: self.progressBar.setValue(self.progressBar.value() + 1))
         self.wordDownloadWorker.start.connect(self.wordDownloadWorker.run)
         self.wordDownloadWorker.done.connect(lambda: tooltip(f'单词下载完成'))
-        self.wordDownloadWorker.done.connect(self.wordDownloadThread.quit)
-        self.wordDownloadWorker.done.connect(lambda: self.mainTab.setEnabled(True))
         self.wordDownloadWorker.done.connect(self.initItem)
+        self.wordDownloadWorker.done.connect(self.downloadWordExample)
         self.wordDownloadWorker.start.emit()
+
+    def downloadWordExample(self):
+        if not self.config['example']:
+            self.downloadSentenceTranslate()
+            return
+        self.wordExampleDownloadWorker = WordExampleDownloadWorker(self.api)
+        self.wordExampleDownloadWorker.moveToThread(self.wordDownloadThread)
+        self.progressBar.setValue(0)
+        self.progressBar.setMaximum(len(self.api.getWordsWithoutExample()))
+        self.wordExampleDownloadWorker.tick.connect(lambda: self.progressBar.setValue(self.progressBar.value() + 1))
+        self.wordExampleDownloadWorker.start.connect(self.wordExampleDownloadWorker.run)
+        self.wordExampleDownloadWorker.done.connect(lambda: tooltip(f'例句下载完成'))
+        self.wordExampleDownloadWorker.done.connect(self.downloadSentenceTranslate)
+        self.wordExampleDownloadWorker.start.emit()
+
+    def downloadSentenceTranslate(self):
+        if not self.config['translate']:
+            self.downloadFinish()
+            return
+        self.SentenceTranslateDownloadWorker = SentenceTranslateDownloadWorker(self.api)
+        self.SentenceTranslateDownloadWorker.moveToThread(self.wordDownloadThread)
+        self.progressBar.setValue(0)
+        self.progressBar.setMaximum(len(self.api.getSentencesWithoutTranslate()))
+        self.SentenceTranslateDownloadWorker.tick.connect(lambda: self.progressBar.setValue(self.progressBar.value() + 1))
+        self.SentenceTranslateDownloadWorker.start.connect(self.SentenceTranslateDownloadWorker.run)
+        self.SentenceTranslateDownloadWorker.done.connect(lambda: tooltip(f'翻译下载完成'))
+        self.SentenceTranslateDownloadWorker.done.connect(self.downloadFinish)
+        self.SentenceTranslateDownloadWorker.start.emit()
+
+    def downloadFinish(self):
+        self.progressBar.setMaximum(1)
+        self.progressBar.setTextVisible(False)
+        self.mainTab.setEnabled(True)
+        self.wordDownloadThread.quit()
 
     @pyqtSlot()
     def on_createBtn_clicked(self):
@@ -174,7 +223,6 @@ class Windows(QDialog, mainUI.Ui_Dialog):
                 self.audioDownloadThread.quit()
                 self.audioDownloadThread.wait()
 
-            self.audioDownloadThread = QThread(self)
             self.audioDownloadThread.start()
             self.audioDownloadWorker = AudioDownloadWorker(audiosDownloadTasks)
             self.audioDownloadWorker.moveToThread(self.audioDownloadThread)

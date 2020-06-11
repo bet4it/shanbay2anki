@@ -37,14 +37,52 @@ class WordDownloadWorker(QObject):
     def run(self):
         currentThread = QThread.currentThread()
 
-        def _query(word):
-            self.api.insertWord(word)
-            self.tick.emit()
-
         for word in self.api.getAllWords():
             if currentThread.isInterruptionRequested():
                 return
             self.api.insertWord(word)
+            self.tick.emit()
+
+        self.done.emit()
+
+class WordExampleDownloadWorker(QObject):
+    start = pyqtSignal()
+    tick = pyqtSignal()
+    done = pyqtSignal()
+    logger = logging.getLogger(__name__ + '.WordExampleDownloadWorker')
+
+    def __init__(self, api):
+        super().__init__()
+        self.api = api
+
+    def run(self):
+        currentThread = QThread.currentThread()
+
+        for row in self.api.getWordsWithoutExample():
+            if currentThread.isInterruptionRequested():
+                return
+            self.api.insertWordExamples(row['id'])
+            self.tick.emit()
+
+        self.done.emit()
+
+class SentenceTranslateDownloadWorker(QObject):
+    start = pyqtSignal()
+    tick = pyqtSignal()
+    done = pyqtSignal()
+    logger = logging.getLogger(__name__ + '.SentenceTranslateDownloadWorker')
+
+    def __init__(self, api):
+        super().__init__()
+        self.api = api
+
+    def run(self):
+        currentThread = QThread.currentThread()
+
+        for row in self.api.getSentencesWithoutTranslate():
+            if currentThread.isInterruptionRequested():
+                return
+            self.api.insertSentenceTranslates(row)
             self.tick.emit()
 
         self.done.emit()

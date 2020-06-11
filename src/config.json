@@ -1,6 +1,9 @@
 {
   "deck": "",
-  "sentence": true,
+  "example": false,
+  "translate": true,
+  "titleCN": false,
+  "titleEN": true,
   "BrEPhonetic": true,
   "AmEPhonetic": false,
   "BrEPron": true,
