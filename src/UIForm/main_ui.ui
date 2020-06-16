@@ -132,31 +132,24 @@
           <string>默认设置</string>
          </property>
          <layout class="QGridLayout" name="gridLayout">
-          <item row="1" column="0">
-           <widget class="QCheckBox" name="exampleCheckBox">
+          <item row="8" column="1">
+           <widget class="QRadioButton" name="AmEPronRadioButton">
             <property name="text">
-             <string>例句</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="1">
-           <widget class="QCheckBox" name="AmEPhoneticCheckBox">
-            <property name="text">
-             <string>美式音标</string>
-            </property>
-           </widget>
-          </item>
-          <item row="7" column="0">
-           <widget class="QRadioButton" name="BrEPronRadioButton">
-            <property name="text">
-             <string>英式发音</string>
-            </property>
-            <property name="checked">
-             <bool>true</bool>
+             <string>美式发音</string>
             </property>
             <attribute name="buttonGroup">
              <string notr="true">pronButtonGroup</string>
             </attribute>
+           </widget>
+          </item>
+          <item row="4" column="0">
+           <widget class="QCheckBox" name="BrEPhoneticCheckBox">
+            <property name="text">
+             <string>英式音标</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
            </widget>
           </item>
           <item row="1" column="1">
@@ -169,13 +162,53 @@
             </property>
            </widget>
           </item>
-          <item row="7" column="2">
+          <item row="4" column="1">
+           <widget class="QCheckBox" name="AmEPhoneticCheckBox">
+            <property name="text">
+             <string>美式音标</string>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="2">
            <widget class="QRadioButton" name="noPronRadioButton">
             <property name="text">
              <string>无发音</string>
             </property>
             <property name="checked">
              <bool>false</bool>
+            </property>
+            <attribute name="buttonGroup">
+             <string notr="true">pronButtonGroup</string>
+            </attribute>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QRadioButton" name="titleENRadioButton">
+            <property name="text">
+             <string>英文标题</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+            <attribute name="buttonGroup">
+             <string notr="true">titleButtonGroup</string>
+            </attribute>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QCheckBox" name="exampleCheckBox">
+            <property name="text">
+             <string>例句</string>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="0">
+           <widget class="QRadioButton" name="BrEPronRadioButton">
+            <property name="text">
+             <string>英式发音</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
             </property>
             <attribute name="buttonGroup">
              <string notr="true">pronButtonGroup</string>
@@ -193,35 +226,35 @@
            </widget>
           </item>
           <item row="3" column="0">
-           <widget class="QCheckBox" name="BrEPhoneticCheckBox">
+           <widget class="QRadioButton" name="webLinkRadioButton">
             <property name="text">
-             <string>英式音标</string>
-            </property>
-            <property name="checked">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="1">
-           <widget class="QRadioButton" name="titleENRadioButton">
-            <property name="text">
-             <string>英文标题</string>
-            </property>
-            <property name="checked">
-             <bool>true</bool>
+             <string>网页链接</string>
             </property>
             <attribute name="buttonGroup">
-             <string notr="true">titleButtonGroup</string>
+             <string notr="true">linkButtonGroup</string>
             </attribute>
            </widget>
           </item>
-          <item row="7" column="1">
-           <widget class="QRadioButton" name="AmEPronRadioButton">
+          <item row="3" column="2">
+           <widget class="QRadioButton" name="noLinkRadioButton">
             <property name="text">
-             <string>美式发音</string>
+             <string>无链接</string>
             </property>
             <attribute name="buttonGroup">
-             <string notr="true">pronButtonGroup</string>
+             <string notr="true">linkButtonGroup</string>
+            </attribute>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="QRadioButton" name="appLinkRadioButton">
+            <property name="text">
+             <string>APP 链接</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+            <attribute name="buttonGroup">
+             <string notr="true">linkButtonGroup</string>
             </attribute>
            </widget>
           </item>
@@ -258,7 +291,8 @@
  <resources/>
  <connections/>
  <buttongroups>
-  <buttongroup name="titleButtonGroup"/>
   <buttongroup name="pronButtonGroup"/>
+  <buttongroup name="titleButtonGroup"/>
+  <buttongroup name="linkButtonGroup"/>
  </buttongroups>
 </ui>

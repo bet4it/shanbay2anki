@@ -6,7 +6,7 @@ from requests.compat import urljoin
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from .constants import MODEL_FIELDS, DB_FIELDS, INTENT_TEMPLATE
+from .constants import MODEL_FIELDS, DB_FIELDS, WEB_LINK, APP_LINK
 from .noteManager import getOrCreateDeck, getOrCreateModel, getOrCreateModelCardTemplate, addWordToDeck
 
 logger = logging.getLogger(__name__)
@@ -97,17 +97,19 @@ class ShanbayAPI():
             if catalogs is not None:
                 self.bookNames[book] = {'cn': catalogs['book']['name_cn'], 'en': catalogs['book']['name_en']}
                 for c in catalogs['catalogs']:
-                    self.chapterNames[c['id']] = {'cn': c['title_cn'], 'en': c['title_en']}
+                    self.chapterNames[c['id']] = {'cn': c['title_cn'], 'en': c['title_en'], 'id': c['id']}
             else:
                 article = self.getArticle(chapter)
-                self.chapterNames[chapter] =  {'cn': article['title_cn'], 'en': article['title_en']}
-                catalogs = self.getBookCatalogs(article['book_id'])
-                self.bookNames[book] =  {'cn': catalogs['book']['name_cn'], 'en': catalogs['book']['name_en']}
+                self.chapterNames[chapter] =  {'cn': article['title_cn'], 'en': article['title_en'], 'id': article['id']}
+                if book not in self.bookNames:
+                    catalogs = self.getBookCatalogs(article['book_id'])
+                    self.bookNames[book] =  {'cn': catalogs['book']['name_cn'], 'en': catalogs['book']['name_en']}
         bookNameCN = self.bookNames[book]['cn']
         bookNameEN = self.bookNames[book]['en']
+        chapterID = self.chapterNames[chapter]['id']
         chapterNameCN = self.chapterNames[chapter]['cn']
         chapterNameEN = self.chapterNames[chapter]['en']
-        return bookNameCN, bookNameEN, chapterNameCN, chapterNameEN
+        return bookNameCN, bookNameEN, chapterID, chapterNameCN, chapterNameEN
 
     def insertWord(self, word):
         self.db.execute('SELECT 1 FROM words WHERE id=? LIMIT 1', (word,))
@@ -132,13 +134,14 @@ class ShanbayAPI():
         idx = 1
         for obj in reversed(wordData['objects']):
             if obj['app_name'] == '扇贝阅读' and obj['objective'] :
-                sources = (obj['objective']['article_code'], obj['objective']['paragraph_code'], obj['objective']['sentence_code'], obj['source_content'], word)
-                self.db.execute(f"UPDATE words set source_article{idx} = ?, source_paragraph{idx} = ?, source_sentence{idx} = ?, source_content{idx} = ? where id = ?", sources)
+                sources = [obj['objective']['article_code'], obj['objective']['paragraph_code'], obj['objective']['sentence_code'], obj['source_content'], word]
                 if 'book_code' in obj['objective']:
-                    bookNameCN, bookNameEN, chapterNameCN, chapterNameEN = self.getChapterName(obj['objective']['book_code'], obj['objective']['article_code'])
+                    bookNameCN, bookNameEN, articleCode, chapterNameCN, chapterNameEN = self.getChapterName(obj['objective']['book_code'], obj['objective']['article_code'])
+                    sources[0] = articleCode
                     self.db.execute(f"UPDATE words set source_type{idx} = ?, source_name_cn{idx} = ?, source_name_en{idx} = ?, source_title_cn{idx} = ?, source_title_en{idx} = ? where id = ?", ('book', bookNameCN, bookNameEN, chapterNameCN, chapterNameEN, word))
                 elif 'article_code' in obj['objective']:
                     self.db.execute(f"UPDATE words set source_type{idx} = ?, source_name_en{idx} = ? where id = ?", ('news', obj['source_name'], word))
+                self.db.execute(f"UPDATE words set source_article{idx} = ?, source_paragraph{idx} = ?, source_sentence{idx} = ?, source_content{idx} = ? where id = ?", sources)
                 idx += 1
                 if idx == 3:
                     break
@@ -195,13 +198,16 @@ class ShanbayAPI():
                 if currentConfig['titleCN'] and row[f'source_name_cn{i}']:
                     word[f'source_name{i}'] = row[f'source_name_cn{i}']
                     if  row[f'source_title_cn{i}']:
-                        word[f'source_name{i}'] += ' ── ' + row[f'source_title_cn{i}']
+                        word[f'source_name{i}'] += '<br>' + row[f'source_title_cn{i}']
                 else:
                     word[f'source_name{i}'] = row[f'source_name_en{i}']
                     if  row[f'source_title_en{i}']:
                         word[f'source_name{i}'] += ' -- ' + row[f'source_title_en{i}']
-                if row[f'source_type{i}'] in INTENT_TEMPLATE:
-                    word[f'source_name{i}'] = INTENT_TEMPLATE[row[f'source_type{i}']].format(
+                if currentConfig['webLink'] and row[f'source_type{i}'] in WEB_LINK:
+                    word[f'source_name{i}'] = WEB_LINK[row[f'source_type{i}']].format(
+                        row[f'source_article{i}'], word[f'source_name{i}'])
+                if currentConfig['appLink'] and row[f'source_type{i}'] in APP_LINK:
+                    word[f'source_name{i}'] = APP_LINK[row[f'source_type{i}']].format(
                         row[f'source_article{i}'], row[f'source_paragraph{i}'], word[f'source_name{i}'])
             addWordToDeck(deck, model, word)
 

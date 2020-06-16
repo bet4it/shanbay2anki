@@ -72,6 +72,9 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.exampleCheckBox.setChecked(config['example'])
         self.titleCNRadioButton.setChecked(config['titleCN'])
         self.titleENRadioButton.setChecked(config['titleEN'])
+        self.webLinkRadioButton.setChecked(config['webLink'])
+        self.appLinkRadioButton.setChecked(config['appLink'])
+        self.noLinkRadioButton.setChecked(config['noLink'])
         self.BrEPhoneticCheckBox.setChecked(config['BrEPhonetic'])
         self.AmEPhoneticCheckBox.setChecked(config['AmEPhonetic'])
         self.BrEPronRadioButton.setChecked(config['BrEPron'])
@@ -108,6 +111,9 @@ class Windows(QDialog, mainUI.Ui_Dialog):
             translate=self.translateCheckBox.isChecked(),
             titleCN=self.titleCNRadioButton.isChecked(),
             titleEN=self.titleENRadioButton.isChecked(),
+            webLink=self.webLinkRadioButton.isChecked(),
+            appLink=self.appLinkRadioButton.isChecked(),
+            noLink=self.noLinkRadioButton.isChecked(),
             BrEPhonetic=self.BrEPhoneticCheckBox.isChecked(),
             AmEPhonetic=self.AmEPhoneticCheckBox.isChecked(),
             BrEPron=self.BrEPronRadioButton.isChecked(),

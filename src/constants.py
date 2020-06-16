@@ -1,5 +1,8 @@
 MODEL_FIELDS = ('word', 'ipa_uk', 'ipa_us', 'ipa_audio', 'definition_cn', 'source_name1', 'source_content1', 'source_translate1', 'source_name2', 'source_content2', 'source_translate2', 'examples1_en', 'examples1_cn', 'examples2_en', 'examples2_cn')
 DB_FIELDS = ('id', 'word', 'ipa_uk', 'ipa_uk_url', 'ipa_us', 'ipa_us_url', 'definition_cn', 'definition_en', 'updated_at', 'source_type1', 'source_name_cn1', 'source_name_en1', 'source_article1', 'source_title_cn1', 'source_title_en1', 'source_paragraph1', 'source_sentence1', 'source_content1', 'source_translate1', 'source_type2', 'source_name_cn2', 'source_name_en2', 'source_article2', 'source_title_cn2', 'source_title_en2', 'source_paragraph2', 'source_sentence2', 'source_content2', 'source_translate2', 'examples1_en', 'examples1_cn', 'examples2_en', 'examples2_cn')
-INTENT_BOOK = '<a href="android-app://com.shanbay.news/#Intent;component=com.shanbay.news/.article.dictionaries.article.DictArticleActivity;S.extra_article_id={};S.extra_paragraph_id={};end">{}</a>'
-INTENT_NEWS = '<a href="android-app://com.shanbay.news/#Intent;component=com.shanbay.news/.article.news.NewsArticleWebActivity;S.article_web_id={};S.article_web_paragraph_id={};end">{}</a>'
-INTENT_TEMPLATE = {'book': INTENT_BOOK, 'news': INTENT_NEWS}
+WEB_BOOK_LINK = '<a href="https://web.shanbay.com/reading/web-reading/articles/{}">{}</a>'
+WEB_NEWS_LINK = '<a href="https://www.shanbay.com/news/articles/{}">{}</a>'
+WEB_LINK = {'book': WEB_BOOK_LINK, 'news': WEB_NEWS_LINK}
+APP_BOOK_LINK = '<a href="android-app://com.shanbay.news/#Intent;component=com.shanbay.news/.article.dictionaries.article.DictArticleActivity;S.extra_article_id={};S.extra_paragraph_id={};end">{}</a>'
+APP_NEWS_LINK = '<a href="android-app://com.shanbay.news/#Intent;component=com.shanbay.news/.article.news.NewsArticleWebActivity;S.article_web_id={};S.article_web_paragraph_id={};end">{}</a>'
+APP_LINK = {'book': APP_BOOK_LINK, 'news': APP_NEWS_LINK}
