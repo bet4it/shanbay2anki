@@ -28,6 +28,7 @@ class Windows(QDialog, mainUI.Ui_Dialog):
         self.api = ShanbayAPI()
 
         self.setupUi(self)
+        self.setWindowTitle("shanbay2anki")
         self.setupLogger()
         self.setupGUIByConfig()
         self.initItem()
