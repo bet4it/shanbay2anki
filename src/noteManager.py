@@ -31,10 +31,8 @@ def getOrCreateModel(modelName):
 
     logger.info(f'创建新模版:{modelName}')
     newModel = mw.col.models.new(modelName)
-    mw.col.models.add(newModel)
     for field in MODEL_FIELDS:
         mw.col.models.addField(newModel, mw.col.models.newField(field))
-    mw.col.models.update(newModel)
     return newModel
 
 
@@ -53,6 +51,7 @@ def getOrCreateModelCardTemplate(modelObject, cardTemplateName):
     with open(os.path.join(dirpath,'styling.css'), 'r') as f:
         modelObject['css'] = f.read()
     mw.col.models.addTemplate(modelObject, cardTemplate)
+    mw.col.models.add(modelObject)
 
 
 def addWordToDeck(deckObject, modelObject, word):
